@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#090914">
+<meta name="description" content="RUSH SPEED - Lightweight internet speed test for Termux.">
+<title>RUSH SPEED — Internet Speed Test</title>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;background:#090914;color:#f5f3ff;
+ font-family:system-ui,-apple-system,sans-serif;
+}
+main{max-width:950px;margin:auto;padding:25px 20px}
+nav{display:flex;justify-content:space-between;align-items:center;padding:15px 0}
+.logo{font-size:22px;font-weight:900;letter-spacing:2px}
+.logo span{color:#a78bfa}
+a{color:#c4b5fd;text-decoration:none}
+.hero{text-align:center;padding:85px 10px 55px}
+.tag{color:#a78bfa;font-size:12px;letter-spacing:3px;font-weight:bold}
+h1{font-size:clamp(45px,10vw,82px);margin:15px 0;
+ background:linear-gradient(100deg,#fff,#a78bfa,#38bdf8);
+ -webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p{color:#aaa7c0;font-size:17px;line-height:1.7}
+.btn{display:inline-block;background:linear-gradient(100deg,#7c3aed,#2563eb);
+ padding:13px 24px;border-radius:12px;color:white;font-weight:bold;margin:12px 5px}
+.panel{background:#141426;border:1px solid #292944;border-radius:20px;
+ padding:24px;margin:20px 0}
+h2{font-size:22px}
+.muted{color:#aaa7c0;line-height:1.7}
+pre{background:#080812;border:1px solid #30304a;border-radius:12px;
+ padding:16px;overflow-x:auto;color:#c4b5fd;line-height:1.8}
+button{background:#29294a;color:white;border:1px solid #49496a;
+ border-radius:8px;padding:9px 15px;cursor:pointer}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.feature{background:#19192e;padding:18px;border-radius:14px}
+.feature b{display:block;margin-bottom:7px}
+footer{text-align:center;color:#77748f;padding:35px 10px}
+</style>
+</head>
+<body>
+<main>
+<nav>
+ <div class="logo">RUSH <span>SPEED</span></div>
+ <a href="https://github.com/raiyani-rush/rush-speed">GitHub ↗</a>
+</nav>
+
+<section class="hero">
+ <div class="tag">FAST · LIGHTWEIGHT · TERMUX</div>
+ <h1>RUSH SPEED</h1>
+ <p>A lightweight internet speed testing tool built for Termux.<br>
+ Measure your download and upload speeds directly from your terminal.</p>
+ <a class="btn" href="https://github.com/raiyani-rush/rush-speed">View on GitHub ↗</a>
+</section>
+
+<section class="panel">
+ <div class="tag">GET STARTED</div>
+ <h2>Install in Termux</h2>
+ <p class="muted">Run these commands to install RUSH SPEED.</p>
+ <pre id="commands">pkg update
+pkg install rush-speed
+rush-speed</pre>
+ <button onclick="copyCommands()">Copy commands</button>
+</section>
+
+<section class="panel">
+ <div class="tag">WHY RUSH SPEED?</div>
+ <h2>Built for simplicity.</h2>
+ <div class="grid">
+  <div class="feature"><b>⚡ Fast testing</b><span class="muted">Quick download and upload measurements.</span></div>
+  <div class="feature"><b>📱 Termux ready</b><span class="muted">Designed for Android and Termux.</span></div>
+  <div class="feature"><b>📊 JSON output</b><span class="muted">Machine-readable test results.</span></div>
+  <div class="feature"><b>🌐 Cloudflare</b><span class="muted">Measures your connection to Cloudflare.</span></div>
+ </div>
+</section>
+
+<section class="panel">
+ <div class="tag">OPEN SOURCE</div>
+ <h2>Made for the community.</h2>
+ <p class="muted">Explore the source code, report issues and follow development on GitHub.</p>
+ <a class="btn" href="https://github.com/raiyani-rush/rush-speed">Explore repository ↗</a>
+</section>
+
+<footer>
+ RUSH SPEED · Version 1.0.0<br>
+ Built with ⚡ for Termux
+</footer>
+</main>
+<script>
+function copyCommands(){
+ const text=document.getElementById('commands').innerText;
+ if(navigator.clipboard){
+  navigator.clipboard.writeText(text).then(()=>alert('Commands copied!'));
+ }else{
+  alert('Select and copy the commands manually.');
+ }
+}
+</script>
+</body>
+</html>

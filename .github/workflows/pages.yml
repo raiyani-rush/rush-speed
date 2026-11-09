@@ -63,15 +63,7 @@ jobs:
           mkdir -p public
           termux-apt-repo --sign repo-input public/apt stable main
           cp "$RUNNER_TEMP/rush-speed-archive-keyring.gpg" public/rush-speed-archive-keyring.gpg
-          cat > public/index.html <<'HTML'
-          <!doctype html>
-          <html lang="en">
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width,initial-scale=1">
-          <title>RUSH SPEED APT repository</title>
-          <h1>RUSH SPEED</h1>
-          <p>Signed Termux APT repository.</p>
-          HTML
+          cp site/index.html public/index.html
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
