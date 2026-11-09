@@ -1,0 +1,213 @@
+#!/usr/bin/env python3
+"""RUSH SPEED: a short internet speed test for Termux."""
+import argparse
+import json
+import sys
+import threading
+import time
+import urllib.parse
+import urllib.request
+import uuid
+
+BASE = "https://speed.cloudflare.com"
+UA = "RUSH-SPEED/1.0 (Termux)"
+CHUNK = 64 * 1024
+UPLOAD_SIZE = 256 * 1024
+
+
+class Counter:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.total = 0
+        self.error = None
+
+    def add(self, n):
+        with self.lock:
+            self.total += n
+
+    def fail(self, message):
+        with self.lock:
+            if self.error is None:
+                self.error = message
+
+    def snapshot(self):
+        with self.lock:
+            return self.total, self.error
+
+
+def headers():
+    return {"User-Agent": UA, "Cache-Control": "no-cache"}
+
+
+def download_worker(deadline, counter, worker_id):
+    while time.monotonic() < deadline:
+        url = BASE + "/__down?" + urllib.parse.urlencode({
+            "bytes": 25_000_000, "rush": uuid.uuid4().hex, "stream": worker_id
+        })
+        request = urllib.request.Request(url, headers=headers())
+        try:
+            with urllib.request.urlopen(request, timeout=3) as response:
+                if not 200 <= response.status < 300:
+                    counter.fail("Download endpoint returned HTTP " + str(response.status))
+                    return
+                while time.monotonic() < deadline:
+                    data = response.read(CHUNK)
+                    if not data:
+                        break
+                    if time.monotonic() <= deadline:
+                        counter.add(len(data))
+        except Exception as exc:
+            if time.monotonic() < deadline:
+                counter.fail(f"{type(exc).__name__}: {exc}")
+            return
+
+
+def upload_worker(deadline, counter, worker_id):
+    payload = bytes([worker_id % 251]) * UPLOAD_SIZE
+    while time.monotonic() < deadline:
+        request = urllib.request.Request(
+            BASE + "/__up?rush=" + uuid.uuid4().hex,
+            data=payload,
+            headers={**headers(), "Content-Type": "application/octet-stream"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=3) as response:
+                response.read(512)
+                if not 200 <= response.status < 300:
+                    counter.fail("Upload endpoint returned HTTP " + str(response.status))
+                    return
+                if time.monotonic() <= deadline:
+                    counter.add(len(payload))
+        except Exception as exc:
+            if time.monotonic() < deadline:
+                counter.fail(f"{type(exc).__name__}: {exc}")
+            return
+
+
+def mbps(byte_count, seconds):
+    return byte_count * 8 / max(seconds, 0.001) / 1_000_000
+
+
+def run_phase(label, duration, streams, worker, quiet=False):
+    counter = Counter()
+    started = time.monotonic()
+    deadline = started + duration
+    threads = [
+        threading.Thread(target=worker, args=(deadline, counter, i), daemon=True)
+        for i in range(streams)
+    ]
+    for thread in threads:
+        thread.start()
+
+    previous_bytes = 0
+    previous_time = started
+    samples = []
+    next_mark = 1
+    try:
+        while True:
+            now = time.monotonic()
+            elapsed = now - started
+            if now >= deadline:
+                break
+            if elapsed >= next_mark:
+                current, _ = counter.snapshot()
+                rate = mbps(current - previous_bytes, now - previous_time)
+                samples.append(rate)
+                previous_bytes = current
+                previous_time = now
+                if not quiet:
+                    filled = min(20, int(elapsed / duration * 20))
+                    bar = "█" * filled + "░" * (20 - filled)
+                    print(f"\r  {label:<8} [{bar}] {elapsed:4.1f}/{duration:g}s  {rate:7.2f} Mbps",
+                          end="", flush=True)
+                next_mark += 1
+            time.sleep(0.05)
+    except KeyboardInterrupt:
+        raise
+
+    for thread in threads:
+        thread.join(timeout=3.2)
+
+    total, error = counter.snapshot()
+    average = mbps(total, duration)
+    if not samples:
+        samples = [average]
+    if not quiet:
+        print(f"\r  {label:<8} [████████████████████] {duration:g}/{duration:g}s  "
+              f"{average:7.2f} Mbps")
+    return {
+        "average_mbps": round(average, 2),
+        "min_sample_mbps": round(min(samples), 2),
+        "max_sample_mbps": round(max(samples), 2),
+        "bytes_transferred": total,
+        "duration_seconds": duration,
+        "error": error,
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="rush-speed",
+        description="RUSH SPEED — 7-second internet speed test per direction"
+    )
+    parser.add_argument("--duration", type=float, default=7.0,
+                        help="seconds per direction (default: 7)")
+    parser.add_argument("--streams", type=int, default=4,
+                        help="parallel connections (1-8; default: 4)")
+    parser.add_argument("--json", action="store_true",
+                        help="print JSON results")
+    args = parser.parse_args()
+
+    if not 1 <= args.duration <= 30:
+        parser.error("--duration must be between 1 and 30 seconds")
+    if not 1 <= args.streams <= 8:
+        parser.error("--streams must be between 1 and 8")
+
+    if not args.json:
+        print("\n  RUSH SPEED  |  Internet speed test")
+        print("  Endpoint: Cloudflare speed test service")
+        print(f"  Test window: {args.duration:g}s download + {args.duration:g}s upload")
+        print("  Uses internet data; mobile data charges may apply.\n")
+        print("  Measuring download...")
+
+    try:
+        down = run_phase("DOWNLOAD", args.duration, args.streams,
+                         download_worker, args.json)
+        if not args.json:
+            print("\n  Measuring upload...")
+        up = run_phase("UPLOAD", args.duration, args.streams,
+                       upload_worker, args.json)
+    except KeyboardInterrupt:
+        print("\n[STOP] Test cancelled.", file=sys.stderr)
+        return 130
+
+    result = {
+        "service": "Cloudflare speed test endpoints",
+        "download": down,
+        "upload": up,
+        "total_test_seconds": round(args.duration * 2, 2),
+    }
+    if args.json:
+        print(json.dumps(result, indent=2))
+    else:
+        print("\n  ┌────────────────────────────────────┐")
+        print("  │           RUSH SPEED RESULT        │")
+        print("  ├────────────────────────────────────┤")
+        print(f"  │ Download average  {down['average_mbps']:>8.2f} Mbps │")
+        print(f"  │ Upload average    {up['average_mbps']:>8.2f} Mbps │")
+        print(f"  │ Download peak     {down['max_sample_mbps']:>8.2f} Mbps │")
+        print(f"  │ Upload peak       {up['max_sample_mbps']:>8.2f} Mbps │")
+        print("  └────────────────────────────────────┘")
+        for name, phase in (("Download", down), ("Upload", up)):
+            if phase["error"]:
+                print(f"  [WARNING] {name}: {phase['error']}")
+            if phase["bytes_transferred"] == 0:
+                print(f"  [WARNING] No {name.lower()} data was measured.")
+        print("\n  Results measure this device's route to Cloudflare,")
+        print("  not a guaranteed maximum for every website or server.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

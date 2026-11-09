@@ -1,0 +1,84 @@
+name: Build and deploy Termux APT repository
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "repo-input/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "github-pages"
+  cancel-in-progress: true
+
+jobs:
+  build-repository:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install repository generator
+        run: python -m pip install --upgrade termux-apt-repo
+
+      - name: Check package input
+        run: |
+          test -n "$(find repo-input -maxdepth 1 -type f -name '*.deb' -print -quit)"
+          ls -lh repo-input/*.deb
+
+      - name: Import repository signing key
+        env:
+          APT_SIGNING_PRIVATE_KEY: ${{ secrets.APT_SIGNING_PRIVATE_KEY }}
+        run: |
+          test -n "$APT_SIGNING_PRIVATE_KEY" || {
+            echo "Missing Actions secret APT_SIGNING_PRIVATE_KEY"
+            exit 1
+          }
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -m 700 -p "$GNUPGHOME"
+          printf '%s' "$APT_SIGNING_PRIVATE_KEY" | gpg --batch --import
+          KEY_FINGERPRINT="$(gpg --batch --with-colons --list-secret-keys | awk -F: '$1 == "fpr" {print $10; exit}')"
+          test -n "$KEY_FINGERPRINT"
+          echo "APT_SIGNING_FINGERPRINT=$KEY_FINGERPRINT" >> "$GITHUB_ENV"
+          gpg --batch --export "$KEY_FINGERPRINT" > "$RUNNER_TEMP/rush-speed-archive-keyring.gpg"
+
+      - name: Generate signed APT repository
+        run: |
+          mkdir -p public
+          termux-apt-repo --sign repo-input public/apt stable main
+          cp "$RUNNER_TEMP/rush-speed-archive-keyring.gpg" public/rush-speed-archive-keyring.gpg
+          cat > public/index.html <<'HTML'
+          <!doctype html>
+          <html lang="en">
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width,initial-scale=1">
+          <title>RUSH SPEED APT repository</title>
+          <h1>RUSH SPEED</h1>
+          <p>Signed Termux APT repository.</p>
+          HTML
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

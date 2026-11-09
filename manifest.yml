@@ -1,0 +1,17 @@
+control:
+  Package: rush-speed
+  Version: 1.0.0
+  Architecture: all
+  Maintainer: RUSH SPEED Maintainers <raiyani-rush@users.noreply.github.com>
+  Section: net
+  Priority: optional
+  Depends: python
+  Homepage: https://github.com/raiyani-rush/rush-speed
+  Description: Lightweight 7-second internet speed test for Termux
+    Measures download and upload throughput using Cloudflare's public
+    speed-test endpoints. Requires an internet connection.
+
+data_files:
+  bin/rush-speed:
+    source: package/files/rush-speed
+    perm: "755"
