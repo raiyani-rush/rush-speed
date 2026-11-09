@@ -57,6 +57,8 @@ jobs:
           gpg --batch --export "$KEY_FINGERPRINT" > "$RUNNER_TEMP/rush-speed-archive-keyring.gpg"
 
       - name: Generate signed APT repository
+        env:
+          GNUPGHOME: ${{ runner.temp }}/gnupg
         run: |
           mkdir -p public
           termux-apt-repo --sign repo-input public/apt stable main
